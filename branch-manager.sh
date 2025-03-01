@@ -33,15 +33,20 @@ function git_sync {
     exit 1
 }
 
-# Register nickname for this project
-if [ "$1" == "-s" ]; then
-    echo "Starting Git configuration for this project..."
-
-    # Create members.json if it doesn't exist
+# Ensure members.json exists
+function ensure_members_file {
     if [ ! -f "$MEMBERS_FILE" ]; then
         echo "{}" > "$MEMBERS_FILE"
         echo "Created new $MEMBERS_FILE file."
     fi
+}
+
+# Register nickname for this project
+if [ "$1" == "-s" ]; then
+    echo "Starting Git configuration for this project..."
+
+    # Ensure members.json exists
+    ensure_members_file
 
     # Pull latest changes before modifying the file
     git_sync
@@ -65,4 +70,38 @@ if [ "$1" == "-s" ]; then
 
     # Commit and push changes safely
     git add "$MEMBERS_FILE"
-    git co
+    git commit -m "Register nickname: $GIT_NICKNAME"
+    git_sync
+
+    exit 0
+fi
+
+# Unregister nickname from this project
+if [ "$1" == "-d" ]; then
+    echo "Removing Git configuration for this project..."
+
+    # Ensure members.json exists
+    ensure_members_file
+
+    # Pull latest changes before modifying the file
+    git_sync
+
+    # Get current nickname from Git configuration
+    CURRENT_NICKNAME=$(git config --file "$GIT_CONFIG_FILE" --get branch.username)
+
+    if [ -n "$CURRENT_NICKNAME" ]; then
+        # Remove nickname from members.json safely
+        jq "del(.\"$CURRENT_NICKNAME\")" "$MEMBERS_FILE" > tmp.json && mv tmp.json "$MEMBERS_FILE"
+        echo "Removed '$CURRENT_NICKNAME' from $MEMBERS_FILE."
+    fi
+
+    # Commit and push changes safely
+    git add "$MEMBERS_FILE"
+    git commit -m "Unregister nickname: $CURRENT_NICKNAME"
+    git_sync
+
+    exit 0
+fi
+
+echo "Invalid command."
+usage
